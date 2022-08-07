@@ -273,14 +273,3 @@ Author: AdmiJW
         //...
     }
     ```
-
-
-1. RESTful with Spring
-   * We put @ResponseBody annotation on controller method to indicate any object returned will be serialzied into JSON
-   * The mapping can accept path parameters: in mapping annotation, use @RequestMapping("path/{var}").
-   * Get the path parameter by annotation in parameter list: @PathVariable("id")
-   * `Jackson Core` is a dependency that is used to serialize and deserialize JSON automatically. Comes included.
-   * To allow XML, you have to include `Jackson Dataform XML` form mvnrepository.com
-   * To return Json data, controller methods shall return `Optional<Obj>` or `List<Obj>`.
-   * Use `@RestController` to automatically set all methods to `@ResponseBody` by default.
-   * Use `@RequestBody` in controller method to deserialize JSON into object.
