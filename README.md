@@ -264,6 +264,10 @@ Author: AdmiJW
 
 ## 6. More on JPA 📊
 
+
+[**!! GREAT REFERENCE HERE**](https://stackabuse.com/guide-to-jpa-with-hibernate-basic-mapping/)
+
+
 > JPA is simply a API, and thus doesn't provide any implementation but solely defines and standardizes the concepts of ORM in Java. For the implementations, we usually get them from the vendors, like the more well known **Hibernate**.
 
 * Use the **`@Entity`** annotation to mark the class as an entity. JPA will detect the entity and create a table for it.
@@ -294,8 +298,91 @@ Author: AdmiJW
     }
     ```
 
+* The **`@JoinColumn`** annotation is used to specify that a foreign key column has to be used to map a relationship. Commonly used flags include `name` and `referencedColumnName`.
 
+    ```java
+    @JoinColumn(name = "TEACHER_ID", referencedColumnName = "ID")
+    // The foreign key column name is teacher_id and it references the id column (primary key) of the referenced entity 
+    ```
 
+* It is a better practice to put the **`@JoinColumn`** annotation on the entity that should have the foreign key column for standard (Even if JPA is smart enough to put the column at the correct table). We call the entity that has the foreign key column the **owning side**, and the other entity, the **referenced side**. 
+
+* Eg: We have Teacher and Course. One Teacher teaches many Course. We can simply define the referencing field in `Course.java` and not add anything to `Teacher.java`:
+
+    ```java
+    // Course.java
+    @ManyToOne
+    @JoinColumn(name = "TEACHER_ID", referencedColumnName = "ID")
+    private Teacher teacher;
+    ```
+
+* Of course, we have to annotate the type of relationship that we are having: `@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne` etc.
+
+* What if we want to access `Course` from `Teacher` and also vice-versa? We have to define a **bidirectional relationship**:
+
+    ```java
+    @Entity
+    public class Teacher {
+        // ...
+
+        @OneToMany(mappedBy = "teacher")
+        private List<Course> courses;
+    }
+
+    @Entity
+    public class Course {
+        // ...
+        
+        @ManyToOne
+        @JoinColumn(name = "TEACHER_ID", referencedColumnName = "ID")
+        private Teacher teacher;
+    }
+    ```
+
+> **_Important: the `mappedBy` flag tells JPA that the field is already being mapped by another field from another entity. Without this, you will have foreign key in both tables, and may cause infinite looping_**
+
+* By default, One to Many relationships are lazily loaded, while Many to One relationships are eagerly loaded. We can change this by using the **`fetch`** flag.
+
+    ```java
+    @OneToMany(mappedBy = "teacher", fetch = FetchType.EAGER)
+    private List<Course> courses;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Teacher teacher;
+    ```
+
+* Relationships are optional `(NULLABLE)` by default. To change this, set the **`optional`** flag to `false`.
+
+    ```java
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "TEACHER_ID", referencedColumnName = "ID")
+    private Teacher teacher;
+    ```
+
+* When saving entities, the objects has to be **persisted** in the correct order. We can do this with the help of **`cascade`** flag.
+
+    ```java
+    @ManyToOne(optional = false, cascade = CascadeType.PERSIST)
+    @JoinColumn(name = "TEACHER_ID", referencedColumnName = "ID")
+    private Teacher teacher;
+    ```
+
+* There are multiple types of cascading operations: `PERSIST`, `MERGE`, `REMOVE`, `REFRESH`, `DETACH`, and `ALL` (that combines all the previous ones). Cascading will ensure that related entities are persisted before persisting the said entity.
+
+* Many to many relationships are a bit more complex. Use the `@ManyToMany` annotation to mark the relationship. Instead of `@JoinColumn`, use the `@JoinTable` annotation (Since many to many relationships require a table to define the relationship):
+
+    ```java
+    // Course.java
+    @ManyToMany
+    @JoinTable(
+    name = "STUDENTS_COURSES",
+    // Owning side
+    joinColumns = @JoinColumn(name = "COURSE_ID", referencedColumnName = "ID"), 
+    // Referencing side
+    inverseJoinColumns = @JoinColumn(name = "STUDENT_ID", referencedColumnName = "ID")
+    )
+    private List<Student> students;
+    ```
 
 ---
 <br>
