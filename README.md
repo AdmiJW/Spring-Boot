@@ -114,6 +114,8 @@ Author: AdmiJW
 
 ## 4. Passing Data to Spring Boot Pages 💻
 
+* There are 2 main ways to pass data to controllers: **Query Parameters** _(Usually in GET)_ and **Request Body** _(Usually in POST)_. We talk about getting data from query parameters first:
+
 * Servlet way (Old)
 
     * In the controller method, you can have access to `HttpServletRequest` and `HttpServletResponse` objects. Simply define them in parameter and they will be populated by dependency injection. Use the `getParameter(<name>)` method to retrieve the parameter value.
@@ -152,10 +154,31 @@ Author: AdmiJW
 
     * Finally, if a parameter is not required / optional, use the `@RequestParam(name = <name>, required = false)` annotation.
 
+* For getting data from Request Body (POST request) **JSON**, you may use the **`@RequestBody`** annotation. What's awesome is that it provides auto-mapping to your **POJO** (Plain Old Java Objects)
+
+    ```java
+    @RequestMapping("/")
+    public String index(@RequestBody Person person) {
+        return "Hi " + person.name;
+    }
+    ```
+
+* If you just want to retrieve the key value pairs from the request body's JSON, you can use `Map<>` for this purpose
+
+    ```java
+    @RequestMapping("/")
+    public String index(@RequestBody Map<String, String> params) {
+        return "Hi " + params.get("name");
+    }
+    ```
+
 ---
 <br>
 
 ## 5. Java Persistence API (JPA) 🗂
+
+> The Java Persistence API (JPA) is the persistence standard of the Java ecosystem. It allows us to map our domain model directly to the database structure and then gives us the flexibility of manipulating objects in our code - instead of messing with cumbersome JDBC components like Connection, ResultSet, etc. JPA is an API that aims at standardizing the way we access a relational database from Java software using Object Relational Mapping (ORM).
+
 
 * Ensure required dependencies are included. Include **Spring Data JPA**, **Spring Web** (if required), and corresponding datastore dependency, like **H2** for in-memory database.
 
@@ -184,9 +207,9 @@ Author: AdmiJW
     }
     ```
 
-* Include `spring.jpa.hibernate.ddl-auto` in the `application.properties` file to set how database are updated on each startup.
+* Include `spring.jpa.hibernate.ddl-auto` in the `application.properties` file to set how database are updated on each startup. Like `create-drop` will drop all tables and create them anew every time the application is started.
 
-* Inside entities, use the `**@Id**` annotation to set the primary key. Use the `**@GeneratedValue(strategy=GenerationType.?)**` annotation to set the strategy for generating the primary key.
+* Inside entities, use the **`@Id`** annotation to set the primary key. Use the **`@GeneratedValue(strategy=GenerationType.TYPE)`** annotation to set the strategy for generating the primary key.
 
     ```java
     @Entity
@@ -219,7 +242,7 @@ Author: AdmiJW
     }
     ```
 
-* JPA is smart enough to provide implementation of certain repository methods that match a certain pattern, such as: `findBy<field>`, `findAllBy<field>`. [**Reference HERE**](https://docs.spring.io/spring-data/jpa/docs/1.5.0.RELEASE/reference/html/jpa.repositories.html). For even complex queries, write JPQL queries inside `@Query(<query>)` annotation.
+* JPA is smart enough to provide implementation of certain repository methods that match a certain pattern, such as: `findBy<field>`, `findAllBy<field>`. [**Reference HERE**](https://docs.spring.io/spring-data/jpa/docs/1.5.0.RELEASE/reference/html/jpa.repositories.html)
 
     ```java
     public interface MyRepository extends CrudRepository<MyEntity, Long> {
@@ -227,10 +250,57 @@ Author: AdmiJW
     }
     ```
 
+* For more complex queries, write JPQL queries inside `@Query(<query>)` annotation, or regular SQL if you set `nativeQuery=true`.
+
+    ```java
+    public interface MyRepository extends CrudRepository<MyEntity, Long> {
+        @Query("SELECT u FROM MyEntity u WHERE u.emailAddress = :emailAddress AND u.lastname = :lastname", nativeQuery=true)
+        List<User> findByEmailAddressAndLastname(@Param("emailAddress") String emailAddress, @Param("lastname") String lastname);
+    }
+    ```
+
 ---
 <br>
 
-## 6. RESTful with Spring 📪
+## 6. More on JPA 📊
+
+> JPA is simply a API, and thus doesn't provide any implementation but solely defines and standardizes the concepts of ORM in Java. For the implementations, we usually get them from the vendors, like the more well known **Hibernate**.
+
+* Use the **`@Entity`** annotation to mark the class as an entity. JPA will detect the entity and create a table for it.
+
+* Use the **`@Id`** annotation to mark the field as the primary key. Use `@GeneratedValue` to auto generate the values, such as for the ID primary key. There are multiple value generation strategies, which you can specify by setting the strategy flag:
+
+    ```java
+    @GeneratedValue(strategy = GenerationType.TYPE)
+    ```
+
+* For dates, legacy systems may use classes from the `java.util`, such as `Date`, `Timestamp` etc. These datatypes has to be annotated with the **`@Temporal`** annotation.
+
+    ```java
+    public class Student {
+        @Temporal(TemporalType.DATE)
+        private Date birthDate;
+    }
+    ```
+
+* In newer JPA, we recommend use classes from the `java.time` package, such as `LocalDate`, `LocalTime` etc. These are automatically handled by JPA and thus don't need to be annotated (better).
+
+* Enumerations are handled by JPA by using the **`@Enumerated`** annotation. We can either use the **`ORDINAL`** strategy or the **`STRING`** strategy.
+
+    ```java
+    public class Student {
+        @Enumerated(EnumType.STRING)        // Default is ORDINAL
+        private Gender gender;
+    }
+    ```
+
+
+
+
+---
+<br>
+
+## 7. RESTful with Spring 📪
 
 * We put **`@ResponseBody`** annotation on the controller method to indicate that the return value will be serialized into a JSON object.
 
