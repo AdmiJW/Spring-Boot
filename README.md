@@ -339,7 +339,27 @@ Author: AdmiJW
     }
     ```
 
-> **_Important: the `mappedBy` flag tells JPA that the field is already being mapped by another field from another entity. Without this, you will have foreign key in both tables, and may cause infinite looping_**
+> **_Important: the `mappedBy` flag tells JPA that the field is already being mapped by another field from another entity. Without this, you will have foreign key in both tables!**
+
+* A common bug in Bidirectional relationship is **Infinite Recursion**. When trying to serialize an entity into JSON, entity A might contain reference to entity B, which also contain reference to entity A. Serializing this will lead to infinite recursion. To solve this, there are [**Solutions**](https://www.baeldung.com/jackson-bidirectional-relationships-and-infinite-recursion) such as using **`@JsonManagedReference`** and **`@JsonBackReference`** so that the one with the `@JsonBackReference` will not be included in JSON
+
+    ```java
+    public class User {
+        public int id;
+        public String name;
+
+        @JsonManagedReference
+        public List<Item> userItems;
+    }
+
+    public class Item {
+        public int id;
+        public String itemName;
+
+        @JsonBackReference
+        public User owner;
+    }
+    ```
 
 * By default, One to Many relationships are lazily loaded, while Many to One relationships are eagerly loaded. We can change this by using the **`fetch`** flag.
 
