@@ -172,6 +172,8 @@ Author: AdmiJW
     }
     ```
 
+> **From my personal experience, be careful when using `@RequestBody` annotation with `Entity`. It can easily lead to JPA errors if not careful. In your case, you might want to use DTO (Data Transfer Object) instead**
+
 ---
 <br>
 
@@ -418,6 +420,15 @@ Author: AdmiJW
     @ResponseBody
     public Person index() {
         return new Person("Alex", 12);
+    }
+    ```
+
+* Another good return type for controller methods is `ResponseEntity<Object>`. It automatically serializes whatever you pass into it as body. 
+
+    ```java
+    @RequestMapping("/")
+    public ResponseEntity<Person> index() {
+        return ResponseEntity.ok(new Person("Alex", 12));
     }
     ```
 
