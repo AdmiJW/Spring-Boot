@@ -259,6 +259,8 @@ Author: AdmiJW
     }
     ```
 
+* User defined repository methods are read-only by default. If we are writing DML queries (`INSERT`, `UPDATE`, `DELETE`), we need to use the **`@Transactional`** annotation. Also, the **`@Modifying`** annotation is required for DML queries.
+
 ---
 <br>
 
