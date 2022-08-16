@@ -463,3 +463,71 @@ Author: AdmiJW
         //...
     }
     ```
+
+---
+<br>
+
+## 8. Templating Engine 🏎
+
+* Templating engine enables you to render HTML pages with dynamic content. You write a template HTML page, and complete them with dynamic content from your backend server to generate a full dynamic HTML page to be sent to the client.
+
+* Apart from using REST API design architecture and connect with frontend frameworks such as React, Vue or Angular, we can use templating engine to render the pages, thus hundred percent MVC model compliant. 
+
+> *That does not pose as a limitation! You can still build applications that use both templating engine and REST API*
+
+* Popular templating engine that are commonly used alongside Spring Boot are **FreeMarker**, **Thymeleaf**, **Groovy** and **Jade**. A more traditional approach is to use **JSP** - Java Server Pages, supported by Spring out-of-the-box
+
+> **In this guide, _FreeMarker_ will be explained:**
+
+* First and foremost, set up FreeMarker by including the dependency in `pom.xml` file. For Spring Boot projects, look for `spring-boot-starter-freemarker`
+
+    ```xml
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-freemarker</artifactId>
+        <version>2.7.2</version>    <!-- Please look for newer versions -->
+    </dependency>
+    ```
+
+* All the HTML templates shall be included in your `resources/templates` folder, with the extension `.ftlh`. The template engine will look for the templates in this folder. Eg: we have a `resources/templates/index.ftlh` file:
+
+    ```html
+    <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <title>Hello ${name!''}!</title>
+        </head>
+        <body>
+            <h2>Hello ${name!''}!</h2>
+        </body>
+    </html>
+    ```
+
+* In your controllers, you can render the template by returning a string of the template file name:
+
+    ```java
+    @RequestMapping("/")
+    public String index() {
+        return "index";     // FreeMarker will search for index.ftlh in templates folder
+    }
+    ```
+
+* To pass data into the template html, like the `${name}` above, you have to first declare a `Model` parameter, and use the `addAttribute` method to add the data to the model.
+
+    ```java
+    @RequestMapping("/")
+    public String index(Model model) {
+        model.addAttribute("name", "Alex");
+        return "index";
+    }
+    ```
+
+* You can look at how to write effective FreeMarker templates [**HERE**](https://freemarker.apache.org/docs/dgui_quickstart.html). I will list down some of the common usages:
+
+| Usage | Description | Example |
+|-|-|-|
+| Conditional Rendering | Only render part of HTML if condition is true | `<#if user == "Big Joe"> Hi Big Joe </#if>` |
+| Loop Rendering | Render HTML from sequence of data | `<#list animals as animal><tr><td>${animal.name}<td>${animal.price} Euros</#list>` |
+| Include partial templates | Render HTML from other templates, great for component design and reusability. Note that file name are relative | `<#include "header.ftlh">` |
+| [Built-ins](https://freemarker.apache.org/docs/ref_builtins.html) | Modify data without having to modify backend code | `${ user?upper_case }`<br>`${ user?length }`<br>`${ user?starts_with("J") }` |
+| Default Values | If variable is not specified, fall back to a default value | `${ user!"Guest" }` |
