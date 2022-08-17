@@ -3,6 +3,7 @@
 
 [**!! AWESOME REFERENCE HERE**](https://www.marcobehler.com/guides/spring-security). This note is based off the reference
 
+> **! After you had read this and start developing, you may notice that `WebSecurityConfigurerAdapter` is deprecated. See [THIS](https://spring.io/blog/2022/02/21/spring-security-without-the-websecurityconfigureradapter) for the migration guide**
 
 ---
 
