@@ -1,11 +1,16 @@
 # Spring Security 🔒
 
 
-[**!! AWESOME REFERENCE HERE**](https://www.marcobehler.com/guides/spring-security). This note is based off the reference
+[**!! AWESOME REFERENCE HERE**](https://www.marcobehler.com/guides/spring-security). This note is mainly based off the reference
+
+[**ANOTHER REFERENCE**](https://javatechonline.com/how-to-implement-security-in-spring-boot-project/) which this note references.
+
+<br>
 
 > **! After you had read this and start developing, you may notice that `WebSecurityConfigurerAdapter` is deprecated. See [THIS](https://spring.io/blog/2022/02/21/spring-security-without-the-websecurityconfigureradapter) or [THIS](https://javatechonline.com/spring-security-without-websecurityconfigureradapter/) for the migration guide to avoid writing deprecated code.**
 
 ---
+<br>
 
 ## 1. Spring Security Overview
 
@@ -167,6 +172,16 @@
     }
     ```
 
+* You can observe some authorization implementations above: `authenticated()` and `permitAll()`. Here are common ones:
+
+    | Method | Description |
+    | ------ | ----------- |
+    | `permitAll()` | No authentication and authorization required |
+    | `authenticated()` | Authentication (Log in) required. No authorization needed |
+    | `hasAuthority()` | Requires authentication and authorized with provided role |
+    | `hasAnyAuthority()` | Like `hasAuthority()`, but accessible to multiple provided roles. |
+
+
 ---
 <br>
 
@@ -181,6 +196,12 @@
     1. OAuth2, aka login with Google/Twitter etc, with JWT (JSON Web Tokens). Explained more detail in another section below
 
 * Based on different scenario, different `@Beans` has to be specified to get Spring Security working.
+
+* In case 1, there are even different scenarios to access the user data:
+
+    1. Storing the user data in memory (Primarily for testing)
+    1. In database, access using JDBC
+    1. In database, using Spring Data JPA and `UserDetailsService`
 
     ---
 
@@ -225,6 +246,8 @@
     }
     ```
 
+* Sometimes you may see `UserDetailsManager` being used. `UserDetailsManager` extends `UserDetailsService` and provides additional methods to manage user data, such as `createUser(UserDetails)`, `updateUser(UserDetails)`, `deleteUser(String) etc.
+
 * We can implement the `UserDetailsService` and `UserDetails` interfaces ourselves, or use off-the-shelf implementations by the Spring Security, and configure/extend/override it. See [THE OFFICIAL DOC](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/core/userdetails/UserDetailsService.html):
 
     1. `JdbcUserDetailsManager` - JDBC(database)-based `UserDetailsService`. Configure it to match user table/column structure.
@@ -232,6 +255,8 @@
     2. `InMemoryUserDetailsManager` - `UserDetailsService` that keep all user details in memory, great for testing environment
 
     3. `org.springframework.security.core.userdetail.User` - sensible, default `UserDetails` implementation.
+
+* For JPA based applications (You have a user repository), you can create your own concrete implementation of `UserDetailsService` or `UserDetailsManager`, and use the user repository to authenticate users.
 
 * Therefore, this is the basic flow:
 
@@ -265,7 +290,7 @@
     }
     ```
 
-* If we have multiple password hashing algorithms (like some legacy users whose passwords are stored with MD5, and new users with password hashed with Bcrypt/SHA-256), we can create a [`DelegatingPasswordEncoder`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/crypto/password/DelegatingPasswordEncoder.html)
+* If we have multiple password hashing algorithms (like some legacy users whose passwords are stored with MD5, and new users with password hashed with Bcrypt/SHA-256), we can create a [`DelegatingPasswordEncoder`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/crypto/password/DelegatingPasswordEncoder.html). **Since Spring Boot 5.0, `DelegatingPasswordEncoder` is used as default if you don't register a `PasswordEncoder` bean.**
 
     ```java
     @Bean
@@ -521,3 +546,258 @@
         }
     }
     ```
+
+
+---
+<br>
+
+## A. Example
+
+This repository is an example of how to implement Spring Security to store users in MySQL database through Spring JPA, and open up REST endpoints for login, register and logout.
+
+### 1. `application.properties`
+
+Establish JPA database connection like you would normally do:
+
+```java
+spring.datasource.url=jdbc:mysql://localhost:3306/spring_security
+spring.datasource.username=root
+spring.datasource.password=1234
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+// Set this for session timeout duration (min 60s)
+server.servlet.session.timeout=60s
+...
+```
+
+### 2. Entity
+
+Create a `User` entity that will persist in your database
+
+```java
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class User {
+    @Id
+    @GeneratedValue(strategy =  GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(unique = true)
+    private String username;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String password;
+    private String authority;
+}
+```
+
+### 3. `Repository`
+
+Set up a `UserRepository` for accessing the `User` entity from the database. Here we add `findByUsername(username)` method because our login will be done by username. You may also add `findByEmail(email)` if you see suit.
+
+```java
+public interface UserRepository extends JpaRepository<User, Long> {
+    User findByUsername(String username);
+}
+```
+
+### 4. `UserDetails`
+
+Create a `UserDetails` implementation that will be used by Spring Security as `Principal` (currently logged in user). Alternatively you can use out-of-the-box implementation of `UserDetails`: `org.springframework.security.core.userdetails.User`
+
+```java
+@Getter
+@Setter
+@AllArgsConstructor
+public class MyUserDetails implements UserDetails {
+
+    private User user;
+    
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return Collections.singletonList( new SimpleGrantedAuthority( user.getAuthority() ) );
+    }
+
+    @Override
+    public String getPassword() {
+        return user.getPassword();
+    }
+
+    @Override
+    public String getUsername() {
+        return user.getUsername();
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+}
+```
+
+### 5. `UserDetailsService`
+
+Create a `UserDetailsService` implementation that will be used by Spring Security. At minimum you have to implement `loadUserByUsername(username)` 
+
+```java
+public class MyUserDetailsService implements UserDetailsService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) {
+        User u = userRepository.findByUsername(username);
+        return new MyUserDetails(u);
+    }
+}
+```
+
+### 6. `SecurityConfigurerAdapter`
+
+Configure Spring Security to use `UserDetailsService` and secure your controllers.
+
+For our application, the login will be done entirely through POST request to `/login` endpoint. The logout, however, will use the default implementation provided by Spring Security. Registration requests will be sent to `/register` endpoint as a POST request. Other than that, `/who_am_i` endpoint to check login status, `/am_i_admin` endpoint require `ADMIN` authorization, and `/am_i_user` endpoint require `USER` authorization.
+
+```java
+@Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
+public class MyWebSecurityConfig {
+    AuthenticationProvider a;
+    
+    @Bean
+    protected SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests()
+            .antMatchers("/register").permitAll()
+            .antMatchers("/who_am_i").permitAll()
+            .antMatchers("/am_i_admin").hasAuthority("ADMIN")
+            .antMatchers("/am_i_user").hasAuthority("USER")
+            .and()
+        .formLogin()
+            .disable()
+        .logout()
+            .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
+            .logoutSuccessUrl("/logout_success")
+            .permitAll()
+            .and()
+        .csrf()
+            .disable()
+        .rememberMe()
+            .rememberMeParameter("rememberMe")
+            .key("theKeyisHere")
+            .tokenValiditySeconds(120);
+
+        return http.build();
+    }
+
+    // Register our UserDetailsService bean here
+    @Bean
+    public UserDetailsService myUserDetailsService() {
+        return new MyUserDetailsService();
+    }
+
+    // The default password encoder for Spring Boot is DelegatingPasswordEncoder. But since we have to get an instance of it inside register endpoint, we have to register it as a bean.
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    // Registering AuthenticationManager as a bean enables us to use authenticationManager to perform authentication process in controllers.
+    @Bean
+    public AuthenticationManager authenticationManagerBean(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+}
+```
+
+### 7. `Controller`
+
+Finally, implement the controller methods
+
+```java
+@Controller
+public class AuthController {
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+
+    @PostMapping("/login")
+    public ResponseEntity<Object> loginPostRoute(
+        @RequestBody User user
+    ) { 
+        Authentication a = new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword());
+
+        try {
+            a = authenticationManager.authenticate(a);
+            SecurityContextHolder.getContext().setAuthentication(a);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
+        }
+        return ResponseEntity.ok( Collections.singletonMap("message", "Login successful") );
+    }
+    
+
+    @RequestMapping("/logout_success")
+    public ResponseEntity<Object> logoutSuccessRoute() {
+        return ResponseEntity.ok( Collections.singletonMap("message", "Logout successful") );
+    }
+
+    
+
+    @PostMapping("/register")
+    public ResponseEntity<Object> registerRoute(
+        @RequestBody User user
+    ) {
+        if ( user.getId() != null && userRepository.existsById( user.getId() ) )
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists");
+        
+        // Don't forget that password need to be stored hashed
+        user.setPassword( passwordEncoder.encode( user.getPassword() ) );
+        userRepository.save(user);
+        return ResponseEntity.ok( Collections.singletonMap("message", "Registration successful. Please login") );
+    }
+
+
+    @GetMapping("/who_am_i")
+    public ResponseEntity<Object> whoAmIRoute() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        if ( !(principal instanceof MyUserDetails) )
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in");
+        return ResponseEntity.ok( ( (MyUserDetails)principal).getUser() );
+    }
+
+
+    @GetMapping("/am_i_admin")
+    public ResponseEntity<Object> amIAdminRoute() {
+        return ResponseEntity.ok( Collections.singletonMap("message", "You are admin") );
+    }
+
+    @GetMapping("/am_i_user")
+    public ResponseEntity<Object> amIUserRoute() {
+        return ResponseEntity.ok( Collections.singletonMap("message", "You are user") );
+    }
+}
+```
