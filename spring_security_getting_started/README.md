@@ -3,7 +3,7 @@
 
 [**!! AWESOME REFERENCE HERE**](https://www.marcobehler.com/guides/spring-security). This note is based off the reference
 
-> **! After you had read this and start developing, you may notice that `WebSecurityConfigurerAdapter` is deprecated. See [THIS](https://spring.io/blog/2022/02/21/spring-security-without-the-websecurityconfigureradapter) for the migration guide**
+> **! After you had read this and start developing, you may notice that `WebSecurityConfigurerAdapter` is deprecated. See [THIS](https://spring.io/blog/2022/02/21/spring-security-without-the-websecurityconfigureradapter) or [THIS](https://javatechonline.com/spring-security-without-websecurityconfigureradapter/) for the migration guide to avoid writing deprecated code.**
 
 ---
 
@@ -17,13 +17,13 @@
 
 * **Servlet Filters** - Any Spring web application is basically just **one** servlet: `DispatcherServlet` that redirects incoming HTTP requests to your `@Controllers` or `@RestControllers`. 
 
-* Sadly, there is no security features inside the `DispatcherServlet` itself, and we do not want to implement securities inside our own `@Controllers`! (It would be disasterous). Optimally, the authentication and authorization should be done before the request even hit our `@Controllers`!
+* Sadly, there is no security features inside the `DispatcherServlet` itself, and we do not want to implement securities inside our own `@Controllers`! Optimally, the authentication and authorization should be done before the request even hit our `@Controllers`, so that the controllers only contain business logic and nothing else.
 
 * Therefore, we can add **filters** in front of servlets. Think about writing a `SecurityFilter` and configure it in the Tomcat (servlet container/application server) to filter every incoming HTTP request before it hits our servlet.
 
     ![Basic Concept of SecurityFilter](https://www.marcobehler.com/images/servletfilter-1a.png)
 
-* A very basic SecurityFilter that filters HTTP requests, may conceptually look like the following: *(Don't try to understand the exact method, just look at the name and grasp the concept of what it does)*
+* A very basic `SecurityFilter` that filters HTTP requests, may conceptually look like the following: *(This is not even real implementation, just a proof of concept)*
 
     ```java
     import javax.servlet.*;
@@ -76,16 +76,17 @@
     }
     ```
 
-* The above `SecurityServletFilter` is just a conceptually working model. If we were to put reality implementations, it would grew into monsterous, gigantic filter with tons of codes. 
+* The above `SecurityServletFilter` is just a conceptually working model. If we were to put reality implementations, it would grew into monsterous, gigantic single filter unit with tons of codes. 
 
-* Therefore, we would use modular design and split into multiple filters, then chain them together. Eg: *(Incoming Request) -> (Login Method Filter) -> (Authentication Filter) -> (Authorization Filter) -> (Servlet)*. With this approach, we don't even have to fondle with our business logic implementation (the `@Controllers`)
+* Therefore, we would use modular design and split into multiple filters, then chain them together. Eg: __(Incoming Request) -> (Login Method Filter) -> (Authentication Filter) -> (Authorization Filter) -> (Servlet)__. With this approach, we don't even have to fondle with our business logic implementation (the `@Controllers`)
 
 
 ---
+<br>
 
 ## 2. The FilterChain & Security Configuration DSL
 
-* The default Spring Security's FilterChain comes with around 15 different filters, which every HTTPRequest has to go through before hitting your `@Controllers`!
+* The default Spring Security's FilterChain comes with multiple different filters out-of-the-box, which every `HTTPRequest` has to go through before hitting your `@Controllers`!
 
     ![Spring Security's Default FilterChain](https://www.marcobehler.com/images/filterchain-1a.png)
 
@@ -99,15 +100,15 @@
 
     * `FilterSecurityInterceptor` - Does your authorization.
 
-* These filters, for a large part, is Spring Security. You as the developer are responsible to set up configurations: Which URL to protect, which to ignore, and what database table are used for authentication.
+* These filters, for a large part, is Spring Security. You as the developer, are responsible to set up configurations: which URL to protect, which to ignore, and what database table are used for authentication.
 
 ---
 
 * To configure Spring Security, we need a class that:
 
-    1. Annotated with `@EnableWebSecurity`
+    1. Annotated with `@EnableWebSecurity` and `@Configuration`
 
-    1. Extends WebSecurityConfigurer, which basically offers you a configuration DSL/methods. These methods allow us to specify what URIs to protect, or what exploit protections to enable/disable.
+    1. Extends `WebSecurityConfigurerAdapter`, which basically offers you a configuration DSL/methods. These methods allow us to specify what URIs to protect, or what exploit protections to enable/disable.
 
 * Something like this:
 
@@ -141,15 +142,15 @@
     }
     ```
 
-* This `configure` method, is where we specify:
+* You may notice we have to override multiple `configure` methods, where we specify:
 
     1. What URLs to protect, and which ones are public
     
     1. What authentication methods are allowed: `formLogin()` and `httpBasic()`, along with its configurations
 
-    1. and many others...
+    2. and many others such as enabling and disabling exploit protections: `cors()`, `csrf()`, etc.
 
-* If you didn't override the `configure()` method, it comes with a default implementation:
+* If you didn't override the `configure()` method, it comes with a default implementation like so:
 
     ```java
     public abstract class WebSecurityConfigurerAdapter implements
@@ -167,12 +168,13 @@
     ```
 
 ---
+<br>
 
 ## 3. Authentication
 
 * There are usually 3 cases for authentication:
 
-    1. You have full access to the (hashed) password of the user. Eg: saved in database
+    1. You have full access to the (hashed) password of the user. Eg: saved in database you have access to
 
     1. You have no access to the (hashed) password of the user. Eg: 3rd party identity management product with REST services for authentication (Like Atlassian Crowd)
 
@@ -182,11 +184,11 @@
 
     ---
 
-### 3.1 `UserDetailsService` - You have access to user's password
+### 3.1 `UserDetailsService` Bean - You have access to user's password
 
-* For this case, you need to define two beans: `UserDetailsService` (to retrieve user details) and `PasswordEncoder`.
+* For this case, you need to define two beans: concrete implementation of `UserDetailsService` interface (to retrieve user details) and a `PasswordEncoder`. If you are still unclear about **Beans** and dependency injection, refer [HERE](https://www.baeldung.com/spring-bean).
 
-* A `UserDetailsService` is simply like:
+* A `UserDetailsService` is an interface that defines how to load user data. Let's say I created a concrete implementation of `UserDetailsService` called `MyUserDetailsService`. I can register a bean like so:
 
     ```java
     @Bean
@@ -195,50 +197,53 @@
     }
     ```
 
-    where `MyDatabaseUserDetailsService` implements `UserDetailsService`, which has one method to return `UserDetails` object:
+    `MyDatabaseUserDetailsService` implements `UserDetailsService`, which has only one method: `loadUserByUsername(username)` method to return a [`UserDetails`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/core/userdetails/UserDetails.html#:~:text=Interface%20UserDetails&text=Provides%20core%20user%20information.,later%20encapsulated%20into%20Authentication%20objects.) object:
 
     ```java
     public class MyDatabaseUserDetailsService implements UserDetailsService {
-
+        @Override
         UserDetails loadUserByUsername(String username) throws UsernameNotFoundException { // (1)
             // 1. Load the user from the users table by username. If not found, throw UsernameNotFoundException.
             // 2. Convert/wrap the user to a UserDetails object and return it.
             return someUserDetails;
         }
     }
+    ```
 
-    // UserDetails must have methods to get the username, and **hashed** password
-    public interface UserDetails extends Serializable { // (2)
-
-        String getUsername();
-
-        String getPassword();
-
-        // more methods available (if you need it):
-        // isAccountNonExpired,isAccountNonLocked,
-        // isCredentialsNonExpired,isEnabled
+    And this is the `UserDetails` interface defined by Spring Security:
+    
+    ```java
+    package org.springframework.security.core.userdetails;
+    public abstract interface UserDetails extends java.io.Serializable {
+        public abstract  java.util.Collection<? extends org.springframework.security.core.GrantedAuthority> getAuthorities();
+        public abstract java.lang.String getPassword();
+        public abstract java.lang.String getUsername();
+        public abstract boolean isAccountNonExpired();
+        public abstract boolean isAccountNonLocked();
+        public abstract boolean isCredentialsNonExpired();
+        public abstract boolean isEnabled();
     }
     ```
 
-* We can implement the `UserDetailsService` and `UserDetails` interfaces ourselves, or use off-the-shelf implementations by the Spring Security, and configure/extend/override it:
+* We can implement the `UserDetailsService` and `UserDetails` interfaces ourselves, or use off-the-shelf implementations by the Spring Security, and configure/extend/override it. See [THE OFFICIAL DOC](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/core/userdetails/UserDetailsService.html):
 
     1. `JdbcUserDetailsManager` - JDBC(database)-based `UserDetailsService`. Configure it to match user table/column structure.
 
-    1. `InMemoryUserDetailsManager` - `UserDetailsService` that keep all user details in memory, great for testing environment
+    2. `InMemoryUserDetailsManager` - `UserDetailsService` that keep all user details in memory, great for testing environment
 
-    1. `org.springframework.security.core.userdetail.User` - sensible, default `UserDetails` implementation.
+    3. `org.springframework.security.core.userdetail.User` - sensible, default `UserDetails` implementation.
 
 * Therefore, this is the basic flow:
 
     1. Extract username/password combination from HTTP Basic Auth header in a filter
 
-    1. Call your `MyDatabaseUserDetailsService` to load the user from the database, wrapped as UserDetails object, which exposes the user's hashed password
+    2. Call your `MyDatabaseUserDetailsService`, or any registered `UserDetailsService` bean to load the user from the database, wrapped as `UserDetails` object, which contains the user's hashed password (and perhaps roles) to verify
 
-    1. Take the extracted password, hash it *automatically* and compare with the hashed password of your `UserDetails` object.
+    3. Take the inputted password, hash it *automatically* and compare with the hashed password of your `UserDetails` object.
 
 * As you can see from step 3, we need a `PasswordEncoder` `@Bean` to specify our preferred password hashing algorithm (such as BCrypt, the default).
 
-* Therefore, we might specify this `@Bean` in our `SecurityConfig`:
+* Therefore, we register an `PasswordEncoder` `@Bean` in our `WebSecurityConfigurerAdapter` implementation:
 
     ```java
     @Bean
@@ -247,7 +252,20 @@
     }
     ```
 
-* If we have multiple password hashing algorithms (like some legacy users whose passwords are stored with MD5, and new users with password hashed with Bcrypt/SHA-256), we can specify them as follows:
+    and this is the `PasswordEncoder` interface defined by Spring Security:
+    
+    ```java
+    package org.springframework.security.crypto.password;
+    public abstract interface PasswordEncoder {
+        public abstract java.lang.String encode(java.lang.CharSequence rawPassword);
+        public abstract boolean matches(java.lang.CharSequence rawPassword, java.lang.String encodedPassword);
+        public boolean upgradeEncoding(java.lang.String encodedPassword) {
+            return false;
+        }
+    }
+    ```
+
+* If we have multiple password hashing algorithms (like some legacy users whose passwords are stored with MD5, and new users with password hashed with Bcrypt/SHA-256), we can create a [`DelegatingPasswordEncoder`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/crypto/password/DelegatingPasswordEncoder.html)
 
     ```java
     @Bean
@@ -256,11 +274,11 @@
     }
     ```
 
-* This delegating encoder look at the `UserDetail`'s hashed password, which has a `{prefix}` specifying the hashing algorithm used! like `{bcrypt}$2y$12$6t86Rpr3llMANhCUt26oUen2WhvXr/A89Xo9zJion8W7gWgZ/zA0C` or `{sha256}5ffa39f5757a0dad5dfada519d02c6b71b61ab1df51b4ed1f3beed6abe0ff5f6`
+* This delegating encoder look at the `UserDetail`'s hashed password, which has a `{prefix}` specifying the hashing algorithm used! like `{bcrypt}$2y$12$6t86Rpr3llMANhCUt26oUen2WhvXr/A89Xo9zJion8W7gWgZ/zA0C` for Bcrypt, `{sha256}5ffa39f5757a0dad5dfada519d02c6b71b61ab1df51b4ed1f3beed6abe0ff5f6` for SHA-256, or even `{noop}password` for plain password without encryption.
 
     ---
 
-### 3.2 `AuthenticationProvider` - You have no access to user's password
+### 3.2 `AuthenticationProvider` Bean - You have no access to user's password
 
 * Imagine using third party identity management products like Atlassian Crowd. The passwords are not stored in your database, but on Atlassian Crowd's server!
 
@@ -268,8 +286,8 @@
 
     * However, we have a REST API to login against, and send the username & password for authentication
 
-* In such case, we have to instead implement an `AuthenticationProvider` `@Bean`
-
+* In such case, we have to instead implement an `AuthenticationProvider` `@Bean`. Let's say we provide a concrete implementation of `AuthenticationProvider` called `AtlassianCrowdAuthenticationProvider`:
+    
     ```java
     @Bean
     public AuthenticationProvider authenticationProvider() {
@@ -288,7 +306,7 @@
                 String username = authentication.getPrincipal().toString(); 
                 String password = authentication.getCredentials().toString();
 
-                // Do whatever you need to authenticate
+                // Do whatever you need to authenticate. This is not real code by any means
                 User user = callAtlassianCrowdRestService(username, password); 
                 if (user == null) {                      
                     // Throw AuthenticationException on failed login
@@ -301,13 +319,24 @@
     }
     ```
 
+    By the way, this is `AuthenticationProvider` interface as defined by spring security:
+
+    ```java
+    package org.springframework.security.authentication;
+    public abstract interface AuthenticationProvider {
+        public abstract org.springframework.security.core.Authentication authenticate(org.springframework.security.core.Authentication authentication) throws org.springframework.security.core.AuthenticationException;
+        public abstract  boolean supports(java.lang.Class<?> authentication);
+    }
+    ```
+
 * So the basic flow goes like this:
 
     1. Extract username/password combination from HTTP Basic Auth header in a filter
 
-    1. Call your `AuthenticationProvider` to authenticate remotely. Perform authentication logic yourself. No password hashing or similar is required, all of that is done remotely by third party identity management product.
+    2. Call your `AuthenticationProvider`'s `authenticate()` method. Perform specified authentication logic yourself. Throw `AuthenticationException` on failed login, and return a [`Authentication`](https://docs.spring.io/spring-security/site/docs/4.0.x/apidocs/org/springframework/security/core/Authentication.html) on success login.
 
 ---
+<br>
 
 ## 4. Authorization
 
@@ -317,7 +346,7 @@
 
   * **Role** is an authority with a `ROLE_` prefix - `ROLE_ADMIN`, `ROLE_USER` etc
 
-* Using Spring Security, we would need a Java class to represent our authority String, a popular one being `SimpleGrantedAuthority`.
+* Using Spring Security, we would need a Java class to represent our authority String, a popular one being [`SimpleGrantedAuthority`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/core/authority/SimpleGrantedAuthority.html).
 
     ```java
     public final class SimpleGrantedAuthority implements GrantedAuthority {
@@ -349,7 +378,7 @@
 
     Similar concept if you are using a third party identity management product. You would have to retrieve the authorities yourself and provide them in the `AuthenticationProvider`.
 
-* With authorities set up properly, we can now protect URLs from unauthorized authorities inside our `configure()` method in `WebSecurityConfigurerAdapter`:
+* With authorities set up properly, we can now protect URLs from unauthorized authorities inside our `configure()` method in `WebSecurityConfigurerAdapter` implementation:
 
     ```java
     @Configuration
@@ -385,7 +414,7 @@
 
 * Spring Security helps you to protect against variety of common attacks: timing attacks (hash the supplied password on login, even if user does not exist), cache control attacks, content sniffing, click jacking, cross-site scripting etc.
 
-* As from the reference, this note will explain about Cross-Site-Request-Forgery (CSRF) protection: protects any incoming POST (or PUT/DELETE/PATCH) request with a valid CSRF token.
+* As from the reference, this note will explain about **Cross-Site-Request-Forgery (CSRF)** protection: protects any incoming POST (or PUT/DELETE/PATCH) request with a valid CSRF token.
 
 * Spring Security will generate a CSRF token per HTTP session, stores it there and inject into HTML forms (maybe with the help of templating technology like Thymeleaf/FreeMarker). Once the form is submitted once, **the token is invalidated and the form cannot be submitted again**.
 
@@ -429,7 +458,7 @@
 
     1. Make your javascript app to take the `XSRF-TOKEN` cookie value and send it as `X-XSRF-TOKEN` header in every POST(PUT/DELETE/PATCH) request.
 
-* To disable CSRF, we can disable it completely:
+* To disable CSRF, we can disable it completely. **(During development, you may notice your POST requests getting 403 Forbidden responses). This is due to CSRF protection get turned on by default - Spring Security cannot found CSRF token in your request, thus filtering it)**:
 
     ```java
     @EnableWebSecurity
@@ -458,7 +487,7 @@
 
 * So far, we had only setup security on the *web tier* of the application - using `antMatcher` or `regexMatchers` with `WebSecurityConfigurerAdapter`'s DSL. We might also want to "defense in depth" - Other than protecting from URL, we might want to protect our business logics - `@Controllers`, `@Components`, `@Services` or `@Repositories` (the Spring beans)
 
-* This approach is called **method security**, implemented by putting annotations on public method of our Spring beans. That being said, we need to enable method security first from our `ApplicationContextConfiguration`:
+* This approach is called **method security**, implemented by putting annotations on public method of our Spring beans. That being said, we need to enable method security first from our `WebSecurityConfigurerAdapter` implementation by putting `@EnableGlobalMethodSecurity` annotation:
 
     ```java
     @Configuration
@@ -468,14 +497,16 @@
         jsr250Enabled = true    // Allow @RolesAllowed
     ) 
     public class YourSecurityConfig extends WebSecurityConfigurerAdapter{
+        ...
     }
     ```
 
-* `@Secured` and `@RolesAllowed` are basically the same, just that they are from different packages. `@PreAuthorize` and `@PostAuthorize` are more powerful version of `@Secured` and `@RolesAllowed`, as they can also contain valid SpEL expression.
+* `@Secured` and `@RolesAllowed` are basically the same, just that they are from different packages. `@PreAuthorize` and `@PostAuthorize` are more powerful version of `@Secured` and `@RolesAllowed`, as they can also contain any valid SpEL expression.
 
 * All of these annotations will raise `AccessDeniedException` if you try and access a protected method with insufficient authority.
 
     ```java
+    // Note: @Serivce is a special case of @Component (Bean)
     @Service
     public class SomeService {
 
